@@ -3,7 +3,7 @@ import requests
 import json
 
 # API URL
-api_url = "https://digilocas.duckdns.org/api/generate"
+api_url = ""
 
 # 요청할 모델과 프롬프트
 model_name = "qwen2.5:32b"
@@ -20,9 +20,9 @@ def test_performance(input_text):
         data = {
             "model": model_name,
             "prompt": input_text,
-            "options": {
-                "num_ctx": 4096
-            }
+            # "options": {
+            #     "num_ctx": 4096
+            # }
         }
         
         # POST 요청
