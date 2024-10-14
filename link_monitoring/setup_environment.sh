@@ -31,7 +31,7 @@ conda activate $ENV_NAME
 
 # pip로 추가 패키지 설치
 echo "Selenium 및 Gradio 패키지를 설치합니다..."
-pip install selenium streamlit
+pip install selenium streamlit pillow
 
 # Chrome 및 ChromeDriver 설치 (Ubuntu 20.04 기준)
 echo "Google Chrome 및 ChromeDriver를 설치합니다..."

@@ -73,3 +73,10 @@ def check_links(input_file="test_data.xlsx", output_file="processed_data.xlsx"):
 # 실행 시 처리 로직 수행
 if __name__ == "__main__":
     check_links(input_file="test_data.xlsx", output_file="processed_data.xlsx")
+
+
+
+
+## To do List
+# - Full HTML 에서 link 만 뽑아내기.
+# - 리다이렉트시 문제 확인( 최상위 도메인으로 보는 방식(네이버), 유투브는 200으로 오는데 원숭이 등장..)
