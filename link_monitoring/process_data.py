@@ -9,7 +9,7 @@ from datetime import datetime
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import time
 from urllib.parse import urlparse, urlunparse
 import shutil
@@ -106,7 +106,55 @@ def wait_for_page_load(driver, timeout=WAIT_FOR_PAGE_TIMEOUT, check_interval=0.5
     except Exception as e:
         logging.error(f"페이지 로딩 대기 실패: {str(e)}")
 
-# 링크를 처리하는 함수
+# 에러 처리 함수 정의
+def handle_error(result, error_type, exception, error_message, default_image_path):
+    logging.error(f"{error_type} 오류: {str(exception)}")
+    result['status'] = "에러"
+    result['logs'] = f'에러 ({error_message}: {str(exception)})'
+    
+    # 대체 이미지 저장
+    result['screenshot'] = save_default_image(default_image_path, result['id'])
+
+# 대체 이미지 생성 및 저장 함수
+def save_default_image(default_image_path, unique_id):
+    try:
+        # 대체 이미지 생성
+        image = Image.new('RGB', (1920, 1080), color=(255, 255, 255))  # 흰색 배경의 기본 이미지
+
+        # 이미지에 텍스트 추가를 위한 ImageDraw 객체 생성
+        draw = ImageDraw.Draw(image)
+        error_text = "ERROR"
+        error_message = f"ID: {unique_id}"
+
+        # 폰트 설정 (시스템 기본 폰트로 설정, 크기는 150)
+        try:
+            font_path = "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"  # Linux 시스템에서의 예시 경로
+            font = ImageFont.truetype(font_path, 150)
+        except IOError:
+            font = ImageFont.load_default(size=150)  # Arial 폰트가 없는 경우 기본 폰트 사용
+
+        # 텍스트 크기 계산 (bounding box를 이용)
+        text_bbox = draw.textbbox((0, 0), error_text, font=font)
+        text_width, text_height = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
+
+        message_bbox = draw.textbbox((0, 0), error_message, font=font)
+        message_width, message_height = message_bbox[2] - message_bbox[0], message_bbox[3] - message_bbox[1]
+
+        # 중앙에 텍스트 배치
+        draw.text(((1920 - text_width) / 2, (1080 - text_height) / 2 - 200), error_text, fill=(255, 0, 0), font=font)
+        draw.text(((1920 - message_width) / 2, (1080 - message_height) / 2 + 100), error_message, fill=(0, 0, 0), font=font)
+
+        # 파일 경로 생성 및 저장
+        fallback_image_path = os.path.join(screenshot_dir, f"{unique_id}_error.jpg")
+        image.save(fallback_image_path, "JPEG", quality=85)
+        return fallback_image_path
+    except Exception as e:
+        logging.error(f"대체 이미지 생성 오류: {str(e)}")
+        return None
+
+
+
+# 링크를 처리하는 함수 (변경된 부분 포함)
 def process_link(row):
     driver = webdriver.Chrome(options=chrome_options)
     result = row.copy()
@@ -114,17 +162,18 @@ def process_link(row):
     try:
         response = requests.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
         if response.status_code >= 400:
-            result['status'] = f"에러 코드 {response.status_code} - 페이지 없음"
+            result['status'] = "에러"
+            result['log'] = f"에러 코드 {response.status_code} - 페이지 없음"
         else:
             if not compare_without_subdomain(url, response.url):
-                result['status'] = f"리다이렉트 감지 (최종 URL: {response.url})"
+                result['status'] = "리다이렉트 감지"
+                result['log'] = f"Final URL: {response.url}"
             else:
                 result['status'] = "정상"
             
             # 유튜브 URL인지 확인
             if "youtube.com" in urlparse(url).netloc:
-                # HTML 콘텐츠에서 "비공개" 키워드 검색
-                if "비공개" in response.text.lower() or "private video" in response.text.lower():
+                if "비공개" in response.text.lower() or "LOGIN_REQUIRED" in response.text.lower():
                     result['status'] = "비공개 동영상 감지"
                 
         result['last_checked'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -142,13 +191,9 @@ def process_link(row):
 
         result['screenshot'] = screenshot_jpg_path
     except requests.exceptions.RequestException as e:
-        logging.error(f"HTTP 요청 오류: {str(e)}")
-        result['status'] = f'에러 (HTTP 오류: {str(e)})'
-        result['screenshot'] = None
+        handle_error(result, "HTTP 요청", e, "HTTP 오류", screenshot_dir)
     except Exception as e:
-        logging.error(f"처리 중 오류 발생: {str(e)}")
-        result['status'] = f'에러 (스크린샷 오류: {str(e)})'
-        result['screenshot'] = None
+        handle_error(result, "처리 중", e, "스크린샷 오류", screenshot_dir)
     finally:
         driver.quit()
 
@@ -162,7 +207,7 @@ def check_links(input_file="test_data.xlsx"):
         output_file = f"processed_data_{current_time}.xlsx"
         
         df = pd.read_excel(input_file)
-        # df = df[df['id'].astype(str).str.startswith('F카1014003')]
+        df = df[df['id'].astype(str).str.startswith('F카1014003')]
         processed_data = []
         setup_directories()
 
