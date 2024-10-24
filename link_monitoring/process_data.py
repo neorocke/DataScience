@@ -179,21 +179,35 @@ def process_link(row):
     url = row['url']
     try:
         response = requests.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
-        if response.status_code >= 400:
+        
+        # 3xx 상태 코드 처리 (리다이렉트)
+        if 300 <= response.status_code < 400:
+            result['status'] = "리다이렉트 감지"    
+            result['log'] = f"리다이렉트 Code {response.status_code} -> Final URL: {response.url}"
+        
+        # 4xx 상태 코드 처리 (클라이언트 오류)
+        elif 400 <= response.status_code < 500:
             result['status'] = "에러"
-            result['log'] = f"에러 코드 {response.status_code} - 페이지 없음"
+            result['log'] = f"에러 Code {response.status_code} - 클라이언트 오류"
+        
+        # 5xx 상태 코드 처리 (서버 오류)
+        elif 500 <= response.status_code < 600:
+            result['status'] = "에러"
+            result['log'] = f"에러 Code {response.status_code} - 서버 오류"
+        
+        # 정상 응답 처리
         else:
             if not compare_without_subdomain(url, response.url):
                 result['status'] = "리다이렉트 감지"
                 result['log'] = f"Final URL: {response.url}"
             else:
                 result['status'] = "정상"
-            
+
             # 유튜브 URL인지 확인
             if "youtube.com" in urlparse(url).netloc:
                 if "비공개" in response.text.lower() or "LOGIN_REQUIRED" in response.text.lower():
                     result['status'] = "비공개 동영상 감지"
-                
+        
         result['last_checked'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         driver.set_window_size(1920, 1080)
@@ -208,6 +222,7 @@ def process_link(row):
         convert_png_to_jpg(screenshot_png_path, screenshot_jpg_path)
 
         result['screenshot'] = screenshot_jpg_path
+    
     except requests.exceptions.RequestException as e:
         handle_error(result, "HTTP 요청", e, "HTTP 오류", screenshot_dir)
     except Exception as e:
