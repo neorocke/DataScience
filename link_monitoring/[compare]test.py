@@ -44,8 +44,7 @@ tabs = st.tabs(["데이터 필터링", "요약 차트 보기", "이미지 전체
 
 with tabs[0]:
     st.markdown("<div class='md-subtitle'><i class='material-icons'>filter_list</i> 데이터 필터링</div>", unsafe_allow_html=True)
-    with st.expander("검색", expanded=True):  # 검색 아이콘 추가
-        
+    with st.expander(f"Search", expanded=True):
         # URL 상태 필터링 옵션 추가
         status_options = st.multiselect('상태를 선택하세요:', options=data['status'].unique(), default=data['status'].unique())
         filtered_data = data[data['status'].isin(status_options)]
@@ -58,7 +57,7 @@ with tabs[0]:
 
     # 레이아웃 나누기
 
-    col1, col2, col3 = st.columns([4, 0.5, 5.5])
+    col1, col2 = st.columns([2, 3])
 
     with col1:
         st.markdown("<div class='md-subtitle'><i class='material-icons'>view_list</i> URL 목록</div>", unsafe_allow_html=True)
@@ -78,25 +77,8 @@ with tabs[0]:
             allow_unsafe_jscode=True,
             enable_enterprise_modules=True
         )
-        
+
     with col2:
-        st.markdown(
-            """
-            <style>
-                .vertical-line {
-                    border-left: 2px solid #ccc; /* 선의 두께와 색상 */
-                    height: 800px; /* 선의 높이 */
-                    margin-left: 20px;
-                    margin-right: 20px;
-                }
-            </style>
-            <div class="vertical-line"></div>
-            """,
-            unsafe_allow_html=True
-        )
-        
-    with col3:
-        
         st.markdown("<div class='md-subtitle'><i class='material-icons'>info</i> URL 상세 보기</div>", unsafe_allow_html=True)
 
         # 선택된 행이 있는지 확인
@@ -122,7 +104,6 @@ with tabs[0]:
                         st.markdown("<div class='md-error'>이미지를 불러올 수 없습니다.</div>", unsafe_allow_html=True)
                 else:
                     st.markdown("<div class='md-error'>스크린샷을 사용할 수 없습니다.</div>", unsafe_allow_html=True)
-            
 
 with tabs[1]:
     st.markdown("<div class='md-subtitle'><i class='material-icons'>bar_chart</i> 요약 차트 보기</div>", unsafe_allow_html=True)
@@ -197,7 +178,7 @@ with tabs[1]:
         st.plotly_chart(fig)
 
 with tabs[2]:
-    st.markdown("<div class='md-subtitle'><i class='material-icons'>image</i> 필터별 이미지 전체 보기</div>", unsafe_allow_html=True)
+    st.markdown("<div class='md-subtitle'><i class='material-icons'>image</i> 이미지 전체 보기</div>", unsafe_allow_html=True)
 
     grouped_data = filtered_data.groupby('id')
     for id, group in grouped_data:

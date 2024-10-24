@@ -31,7 +31,7 @@ conda activate $ENV_NAME
 
 # pip로 추가 패키지 설치
 echo "Selenium 및 Gradio 패키지를 설치합니다..."
-pip install selenium streamlit pillow
+pip install selenium beautifulsoup4 streamlit streamlit-aggrid pillow plotly
 
 # Chrome 및 ChromeDriver 설치 (Ubuntu 20.04 기준)
 echo "Google Chrome 및 ChromeDriver를 설치합니다..."
@@ -74,6 +74,9 @@ unzip -o chromedriver-linux64.zip -d ./
 chmod +x ./chromedriver-linux64/chromedriver
 sudo mv -f ./chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
 rm chromedriver-linux64.zip
+
+# font
+sudo apt install fonts-nanum
 
 # Conda 환경 설정 완료 메시지
 echo "설치가 완료되었습니다. '$ENV_NAME' 환경이 준비되었습니다."
