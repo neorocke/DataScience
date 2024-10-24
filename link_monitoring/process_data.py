@@ -13,7 +13,9 @@ from PIL import Image, ImageDraw, ImageFont
 import time
 from urllib.parse import urlparse, urlunparse
 import shutil
+import time
 import logging
+
 
 # 로깅 설정
 logging.basicConfig(filename='process.log', level=logging.INFO,
@@ -21,7 +23,7 @@ logging.basicConfig(filename='process.log', level=logging.INFO,
 
 # 환경 설정 상수
 screenshot_dir = 'screenshots'
-MAX_THREADS = 10
+MAX_THREADS = 16
 REQUEST_TIMEOUT = 20  # 요청 타임아웃 (초)
 WAIT_FOR_PAGE_TIMEOUT = 20  # 페이지 로드 대기 타임아웃 (초)
 
@@ -91,18 +93,34 @@ def convert_png_to_jpg(png_path, jpg_path):
         logging.error(f"PNG to JPG 변환 실패: {str(e)}")
 
 # 페이지 완전 로딩 대기 함수
-def wait_for_page_load(driver, timeout=WAIT_FOR_PAGE_TIMEOUT, check_interval=0.5, additional_wait=3):
+def wait_for_page_load(driver, timeout=WAIT_FOR_PAGE_TIMEOUT, check_interval=0.5, stability_threshold=15):
     try:
-        WebDriverWait(driver, timeout).until(lambda d: d.execute_script("return document.readyState") == "complete")
-        last_html = driver.page_source
+        # document.readyState가 'complete'가 될 때까지 대기
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+        
+        stable_count = 0
+        last_dom_length = None
         start_time = time.time()
+
         while time.time() - start_time < timeout:
             time.sleep(check_interval)
-            current_html = driver.page_source
-            if current_html == last_html:
-                break
-            last_html = current_html
-        time.sleep(additional_wait)
+            # 현재 DOM 요소의 개수를 가져옴
+            current_dom_length = driver.execute_script("return document.getElementsByTagName('*').length")
+            
+            if last_dom_length is not None and current_dom_length == last_dom_length:
+                stable_count += 1
+                # print(stable_count)
+                if stable_count >= stability_threshold:
+                    # 안정화 임계값에 도달하면 루프 종료
+                    break
+            else:
+                stable_count = 0  # 안정화 카운트 리셋
+
+            last_dom_length = current_dom_length
+        else:
+            logging.warning("페이지가 지정된 시간 내에 안정화되지 않았습니다.")
     except Exception as e:
         logging.error(f"페이지 로딩 대기 실패: {str(e)}")
 
@@ -110,7 +128,7 @@ def wait_for_page_load(driver, timeout=WAIT_FOR_PAGE_TIMEOUT, check_interval=0.5
 def handle_error(result, error_type, exception, error_message, default_image_path):
     logging.error(f"{error_type} 오류: {str(exception)}")
     result['status'] = "에러"
-    result['logs'] = f'에러 ({error_message}: {str(exception)})'
+    result['log'] = f'에러 ({error_message}: {str(exception)})'
     
     # 대체 이미지 저장
     result['screenshot'] = save_default_image(default_image_path, result['id'])
@@ -199,7 +217,20 @@ def process_link(row):
 
     return result
 
+def time_logger(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
+        elapsed_time_str = time.strftime("%H시간 %M분 %S초", time.gmtime(elapsed_time))
+        logging.info(f"{func.__name__} 처리 시간: {elapsed_time_str}")
+        print(f"{func.__name__} 처리 시간: {elapsed_time_str}")
+        return result
+    return wrapper
+
 # 메인 처리 함수 - 병렬로 링크 처리
+@time_logger
 def check_links(input_file="test_data.xlsx"):
     try:
         # 현재 날짜와 시간을 가져와서 파일 이름 생성
@@ -207,7 +238,7 @@ def check_links(input_file="test_data.xlsx"):
         output_file = f"processed_data_{current_time}.xlsx"
         
         df = pd.read_excel(input_file)
-        df = df[df['id'].astype(str).str.startswith('F카1014003')]
+        # df = df[df['id'].astype(str).str.startswith('F카1014003')]
         processed_data = []
         setup_directories()
 
@@ -223,7 +254,7 @@ def check_links(input_file="test_data.xlsx"):
         logging.error(f"파일 처리 중 오류 발생: {str(e)}")
 
 if __name__ == "__main__":
-    check_links(input_file="test_data_20241014.xlsx")
+    check_links(input_file="test_data_20241025.xlsx")
 
 
 ## To do List
