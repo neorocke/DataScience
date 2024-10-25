@@ -1,0 +1,12 @@
+# .streamlit/config.toml
+
+[theme]
+base = "light"  # 밝은 테마 설정
+primaryColor = "#4285F4"  # 구글 블루 강조 색상
+backgroundColor = "#FFFFFF"  # 기본 배경색으로 깨끗한 흰색
+secondaryBackgroundColor = "#F0F4FA"  # 사이드바 배경으로 적합한 부드러운 푸른색 계열의 회색
+textColor = "#202124"  # 구글의 진한 회색 텍스트 색상
+font = "sans serif"  # 구글 스타일을 반영한 산세리프 폰트
+
+[sidebar]
+backgroundColor = "#0000FF" 

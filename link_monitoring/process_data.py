@@ -178,12 +178,21 @@ def process_link(row):
     result = row.copy()
     url = row['url']
     try:
-        response = requests.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
+        # 리다이렉트를 허용하지 않고 요청 시도
+        response = requests.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=False)
         
         # 3xx 상태 코드 처리 (리다이렉트)
         if 300 <= response.status_code < 400:
-            result['status'] = "리다이렉트 감지"    
-            result['log'] = f"리다이렉트 Code {response.status_code} -> Final URL: {response.url}"
+            # Location 헤더에서 최종 URL 추출
+            final_url = response.headers.get('Location')
+            if final_url:
+                # 만약 리다이렉트된 URL이 상대 경로라면 원본 URL 기준으로 절대 경로 생성
+                final_url = requests.compat.urljoin(url, final_url)
+                result['status'] = "리다이렉트 감지"
+                result['log'] = f"리다이렉트 Code {response.status_code} -> Final URL: {final_url}"
+            else:
+                result['status'] = "리다이렉트 감지"
+                result['log'] = f"리다이렉트 Code {response.status_code} -> Final URL 찾지 못함"
         
         # 4xx 상태 코드 처리 (클라이언트 오류)
         elif 400 <= response.status_code < 500:
@@ -195,11 +204,15 @@ def process_link(row):
             result['status'] = "에러"
             result['log'] = f"에러 Code {response.status_code} - 서버 오류"
         
-        # 정상 응답 처리
+                # 정상 응답 처리
         else:
-            if not compare_without_subdomain(url, response.url):
-                result['status'] = "리다이렉트 감지"
-                result['log'] = f"Final URL: {response.url}"
+            # 콘텐츠가 비어 있는지 확인
+            if len(response.text.strip()) == 0:
+                result['status'] = "비어 있음"
+                result['log'] = "200 OK 응답 - 콘텐츠 없음 (빈 페이지)"
+            # if not compare_without_subdomain(url, response.url):
+            #     result['status'] = "리다이렉트 감지"
+            #     result['log'] = f"Final URL: {response.url}"
             else:
                 result['status'] = "정상"
 
@@ -207,6 +220,8 @@ def process_link(row):
             if "youtube.com" in urlparse(url).netloc:
                 if "비공개" in response.text.lower() or "LOGIN_REQUIRED" in response.text.lower():
                     result['status'] = "비공개 동영상 감지"
+                elif "삭제한" in response.text.lower():
+                    result['status'] = "삭제된 동영상 감지"
         
         result['last_checked'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -215,8 +230,9 @@ def process_link(row):
         wait_for_page_load(driver)
 
         url_hash = generate_hash(url)
-        screenshot_png_path = os.path.join(screenshot_dir, f"{row['id']}_{url_hash}.png")
-        screenshot_jpg_path = os.path.join(screenshot_dir, f"{row['id']}_{url_hash}.jpg")
+        current_time = datetime.now().strftime('%Y%m%d_%H%M%S%f')[:-3] 
+        screenshot_png_path = os.path.join(screenshot_dir, f"{row['id']}_{url_hash}_{current_time}.png")
+        screenshot_jpg_path = os.path.join(screenshot_dir, f"{row['id']}_{url_hash}_{current_time}.jpg")
 
         driver.save_screenshot(screenshot_png_path)
         convert_png_to_jpg(screenshot_png_path, screenshot_jpg_path)

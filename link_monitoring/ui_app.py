@@ -4,9 +4,19 @@ import pandas as pd
 from PIL import Image, UnidentifiedImageError
 import streamlit as st
 import plotly.graph_objects as go
+import glob
+import os
 
 # 페이지 레이아웃 설정
 st.set_page_config(layout="wide")
+
+# 최신 엑셀 파일 찾기 함수
+def get_latest_file(directory, extension="xlsx"):
+    files = glob.glob(os.path.join(directory, f"*.{extension}"))
+    if not files:
+        return None
+    latest_file = max(files, key=os.path.getmtime)
+    return latest_file
 
 # 엑셀 파일 로드
 @st.cache_data
@@ -17,111 +27,166 @@ def load_data(file_path):
 material_css = """
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <style>
-    body { font-family: 'Roboto', sans-serif; }
-    .md-card { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 20px; margin: 20px 0; }
-    .md-title { font-size: 2rem; font-weight: bold; color: #3C4043; display: flex; align-items: center; }
-    .md-title i { font-size: 2rem; margin-right: 8px; }
-    .md-subtitle { font-size: 1.5rem; color: #5F6368; display: flex; align-items: center; }
-    .md-subtitle i { font-size: 1.5rem; margin-right: 4px; }
-    .md-button { background-color: #1A73E8; color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; text-align: center; }
-    .md-button:hover { background-color: #155BB5; }
-    .md-error { color: #D93025; }
-    .md-gallery img { border-radius: 8px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15); margin: 10px; }
+    body { 
+        font-family: 'Roboto', sans-serif;
+        background-color: #F5F5F5; /* 부드러운 회색 배경색 */
+    }
+    .md-card { 
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); 
+        border-radius: 8px; 
+        padding: 20px; 
+        margin: 20px 0; 
+        background-color: #FFFFFF; /* 카드 배경을 흰색으로 */
+    }
+    .md-title { 
+        font-size: 2rem; 
+        font-weight: bold; 
+        color: #3C4043; 
+        display: flex; 
+        align-items: center; 
+    }
+    .md-title i { 
+        font-size: 2rem; 
+        margin-right: 8px; 
+    }
+    .md-subtitle { 
+        font-size: 1rem; 
+        color: #5F6368; 
+        display: flex; 
+        align-items: center; 
+    }
+    .md-subtitle i { 
+        font-size: 1rem; 
+        margin-right: 4px; 
+    }
+    .md-button { 
+        background-color: #1A73E8; 
+        color: white; 
+        padding: 10px 20px; 
+        border-radius: 8px; 
+        cursor: pointer; 
+        text-align: center; 
+    }
+    .md-button:hover { 
+        background-color: #155BB5; 
+    }
+    .md-error { 
+        color: #D93025; 
+    }
+    .md-gallery img { 
+        border-radius: 8px; 
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15); 
+        margin: 10px; 
+    }
+    
 </style>
 """
-
 st.markdown(material_css, unsafe_allow_html=True)
 
-# 데이터 로드
-file_path = 'processed_data_20241024_094802.xlsx'
-data = load_data(file_path)
+# 최신 엑셀 파일 경로 찾기
+latest_file_path = get_latest_file('.', 'xlsx')
+
+# 파일이 있는지 확인
+if latest_file_path:
+    # 데이터 로드
+    data = load_data(latest_file_path)
 
 # 제목
 st.markdown("<div class='md-title text-center'><i class='material-icons'>assessment</i> URL 상태 모니터링 대시보드</div>", unsafe_allow_html=True)
 
+# 사이드바에 데이터 필터링 및 검색 추가
+with st.sidebar:
+    st.success(f"파일 로드 성공: {os.path.basename(latest_file_path)}")
+    st.markdown("<div class='md-subtitle'><i class='material-icons'>filter_list</i>필터</div>", unsafe_allow_html=True)
+    
+    # URL 상태 필터링 옵션 추가
+    status_options = st.multiselect('상태를 선택하세요:', options=data['status'].unique(), default=data['status'].unique())
+    filtered_data = data[data['status'].isin(status_options)]
+
+    # 검색 기능 추가
+    search_query = st.text_input('ID 또는 URL 검색:')
+    if search_query:
+        filtered_data = filtered_data[filtered_data['id'].str.contains(search_query) | 
+                                      filtered_data['url'].str.contains(search_query, case=False)]
+    st.sidebar.write(f"필터 적용 후 총 데이터 개수: {len(filtered_data)}개")
 # 탭 구성
 tabs = st.tabs(["데이터 필터링", "요약 차트 보기", "이미지 전체 보기"])
 
 with tabs[0]:
     st.markdown("<div class='md-subtitle'><i class='material-icons'>filter_list</i> 데이터 필터링</div>", unsafe_allow_html=True)
-    with st.expander("검색", expanded=True):  # 검색 아이콘 추가
-        
-        # URL 상태 필터링 옵션 추가
-        status_options = st.multiselect('상태를 선택하세요:', options=data['status'].unique(), default=data['status'].unique())
-        filtered_data = data[data['status'].isin(status_options)]
 
-        # 검색 기능 추가
-        search_query = st.text_input('ID 또는 URL 검색:')
-        if search_query:
-            filtered_data = filtered_data[filtered_data['id'].str.contains(search_query) | 
-                                        filtered_data['url'].str.contains(search_query, case=False)]
+    with st.expander("결과 리스트", expanded=True): 
+        # 레이아웃 나누기
 
-    # 레이아웃 나누기
+        col1, col2, col3 = st.columns([4, 0.3, 5.7])
 
-    col1, col2, col3 = st.columns([4, 0.5, 5.5])
+        with col1:
+            st.markdown("<div class='md-subtitle'><i class='material-icons'>view_list</i> URL 목록</div>", unsafe_allow_html=True)
 
-    with col1:
-        st.markdown("<div class='md-subtitle'><i class='material-icons'>view_list</i> URL 목록</div>", unsafe_allow_html=True)
+            # AgGrid를 사용하여 데이터 테이블 생성 ('screenshot' 열 제외)
+            display_data = filtered_data[['id', 'url', 'status', 'last_checked','log']]
+            gb = GridOptionsBuilder.from_dataframe(display_data)
+            gb.configure_selection(selection_mode='single', use_checkbox=False)
+            gb.configure_grid_options(enableRangeSelection=True, enableCellTextSelection=True)
+            gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize = 35)  # 자동 페이지 크기 조정
+            # gb.configure_grid_options(domLayout='autoHeight')  # 자동 높이 조정
+            gb.configure_default_column(resizable=True)  # 컬럼 사이즈 조정 가능
+            grid_options = gb.build()
+            grid_options['enableClipboard'] = True
 
-        # AgGrid를 사용하여 데이터 테이블 생성 ('screenshot' 열 제외)
-        display_data = filtered_data[['id', 'url', 'status', 'last_checked','log']]
-        gb = GridOptionsBuilder.from_dataframe(display_data)
-        gb.configure_selection(selection_mode='single', use_checkbox=False)
-        gb.configure_grid_options(enableRangeSelection=True, enableCellTextSelection=True)
-        grid_options = gb.build()
-        grid_options['enableClipboard'] = True
+            grid_response = AgGrid(
+                display_data,
+                gridOptions=grid_options,
+                height=600, 
+                theme="streamlit",
+                update_mode=GridUpdateMode.SELECTION_CHANGED,
+                allow_unsafe_jscode=True,
+                enable_enterprise_modules=True
+            )
+            
+        with col2:
+            st.markdown(
+                """
+                <style>
+                    .vertical-line {
+                        border-left: 2px solid #ccc; /* 선의 두께와 색상 */
+                        height: 700px; /* 선의 높이 */
+                        margin-left: 20px;
+                        margin-right: 20px;
+                    }
+                </style>
+                <div class="vertical-line"></div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+        with col3:
+            
+            st.markdown("<div class='md-subtitle'><i class='material-icons'>info</i> URL 상세 보기</div>", unsafe_allow_html=True)
 
-        grid_response = AgGrid(
-            display_data,
-            gridOptions=grid_options,
-            update_mode=GridUpdateMode.SELECTION_CHANGED,
-            allow_unsafe_jscode=True,
-            enable_enterprise_modules=True
-        )
-        
-    with col2:
-        st.markdown(
-            """
-            <style>
-                .vertical-line {
-                    border-left: 2px solid #ccc; /* 선의 두께와 색상 */
-                    height: 800px; /* 선의 높이 */
-                    margin-left: 20px;
-                    margin-right: 20px;
-                }
-            </style>
-            <div class="vertical-line"></div>
-            """,
-            unsafe_allow_html=True
-        )
-        
-    with col3:
-        
-        st.markdown("<div class='md-subtitle'><i class='material-icons'>info</i> URL 상세 보기</div>", unsafe_allow_html=True)
+            # 선택된 행이 있는지 확인
+            selected_rows = grid_response['selected_rows']
+            if isinstance(selected_rows, pd.DataFrame):
+                if not selected_rows.empty:
+                    selected_row = selected_rows.iloc[0]
+                    st.write(f"**ID:** {selected_row['id']}")
+                    st.write(f"**상태:** {selected_row['status']}")
+                    st.write(f"**마지막 체크 시간:** {selected_row['last_checked']}")
+                    st.write(f"**Log:** {selected_row['log']}")
 
-        # 선택된 행이 있는지 확인
-        selected_rows = grid_response['selected_rows']
-        if isinstance(selected_rows, pd.DataFrame):
-            if not selected_rows.empty:
-                selected_row = selected_rows.iloc[0]
-                st.write(f"**ID:** {selected_row['id']}")
-                st.write(f"**상태:** {selected_row['status']}")
-                st.write(f"**마지막 체크 시간:** {selected_row['last_checked']}")
-                st.write(f"**Log:** {selected_row['log']}")
+                    # 스크린샷 경로 가져오기
+                    screenshot_path = filtered_data[(filtered_data['id'] == selected_row['id']) & (filtered_data['url'] == selected_row['url'])]['screenshot'].values[0]
 
-                # 스크린샷 경로 가져오기
-                screenshot_path = filtered_data[(filtered_data['id'] == selected_row['id'])]['screenshot'].values[0]
-
-                if pd.notnull(screenshot_path) and screenshot_path != '':
-                    st.markdown("<div class='md-subtitle'><i class='material-icons'>image</i> 스크린샷:</div>", unsafe_allow_html=True)
-                    try:
-                        with open(screenshot_path, 'rb') as f:
-                            image = Image.open(f)
-                            st.image(image, use_column_width=True, caption="미리보기")
-                    except (FileNotFoundError, UnidentifiedImageError):
-                        st.markdown("<div class='md-error'>이미지를 불러올 수 없습니다.</div>", unsafe_allow_html=True)
-                else:
-                    st.markdown("<div class='md-error'>스크린샷을 사용할 수 없습니다.</div>", unsafe_allow_html=True)
+                    if pd.notnull(screenshot_path) and screenshot_path != '':
+                        st.markdown("<div class='md-subtitle'><i class='material-icons'>image</i> 스크린샷:</div>", unsafe_allow_html=True)
+                        try:
+                            with open(screenshot_path, 'rb') as f:
+                                image = Image.open(f)
+                                st.image(image, use_column_width=True, caption="미리보기")
+                        except (FileNotFoundError, UnidentifiedImageError):
+                            st.markdown("<div class='md-error'>이미지를 불러올 수 없습니다.</div>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("<div class='md-error'>스크린샷을 사용할 수 없습니다.</div>", unsafe_allow_html=True)
             
 
 with tabs[1]:
