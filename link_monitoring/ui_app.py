@@ -12,7 +12,7 @@ st.set_page_config(layout="wide")
 
 # 최신 엑셀 파일 찾기 함수
 def get_latest_file(directory, extension="xlsx"):
-    files = glob.glob(os.path.join(directory, f"*.{extension}"))
+    files = glob.glob(os.path.join(directory, f"processed_data*.{extension}"))
     if not files:
         return None
     latest_file = max(files, key=os.path.getmtime)
@@ -110,7 +110,7 @@ with st.sidebar:
                                       filtered_data['url'].str.contains(search_query, case=False)]
     st.sidebar.write(f"필터 적용 후 총 데이터 개수: {len(filtered_data)}개")
 # 탭 구성
-tabs = st.tabs(["데이터 필터링", "요약 차트 보기", "이미지 전체 보기"])
+tabs = st.tabs(["데이터 필터링", "요약 차트 보기", "이미지 전체 보기", "상태 코드 설명"])
 
 with tabs[0]:
     st.markdown("<div class='md-subtitle'><i class='material-icons'>filter_list</i> 데이터 필터링</div>", unsafe_allow_html=True)
@@ -278,3 +278,38 @@ with tabs[2]:
                 except (FileNotFoundError, UnidentifiedImageError):
                     with cols[i % 3]:
                         st.markdown(f"<div class='md-error'>이미지 로드 실패: {image_path}</div>", unsafe_allow_html=True)
+                        
+with tabs[3]:
+    # 상태 코드 정의
+    STATUS_OK = "STATUS_OK"
+    STATUS_REDIRECT = "STATUS_REDIRECT"
+    STATUS_CLIENT_ERROR = "STATUS_CLIENT_ERROR"
+    STATUS_SERVER_ERROR = "STATUS_SERVER_ERROR"
+    STATUS_EMPTY_CONTENT = "STATUS_EMPTY_CONTENT"
+    STATUS_YOUTUBE_PRIVATE = "STATUS_YOUTUBE_PRIVATE"
+    STATUS_YOUTUBE_DELETED = "STATUS_YOUTUBE_DELETED"
+    STATUS_YOUTUBE_AGE_RESTRICTED = "STATUS_YOUTUBE_AGE_RESTRICTED"
+    STATUS_YOUTUBE_REGION_BLOCKED = "STATUS_YOUTUBE_REGION_BLOCKED"
+    STATUS_YOUTUBE_UNAVAILABLE = "STATUS_YOUTUBE_UNAVAILABLE"
+    STATUS_ERROR = "STATUS_ERROR"
+
+    # 상태 코드 설명 사전
+    status_descriptions = {
+        STATUS_OK: "정상 응답",
+        STATUS_REDIRECT: "리다이렉트 발생",
+        STATUS_CLIENT_ERROR: "클라이언트 오류 (4xx 상태 코드)",
+        STATUS_SERVER_ERROR: "서버 오류 (5xx 상태 코드)",
+        STATUS_EMPTY_CONTENT: "빈 페이지 감지",
+        STATUS_YOUTUBE_PRIVATE: "유튜브 비공개 동영상 감지",
+        STATUS_YOUTUBE_DELETED: "유튜브 삭제된 동영상 감지",
+        STATUS_YOUTUBE_AGE_RESTRICTED: "유튜브 연령 제한 동영상 감지",
+        STATUS_YOUTUBE_REGION_BLOCKED: "유튜브 지역 제한 동영상 감지",
+        STATUS_YOUTUBE_UNAVAILABLE: "유튜브 동영상 사용 불가 감지",
+        STATUS_ERROR: "기타 처리 중 오류 발생"
+    }   
+    
+    st.markdown("<div class='md-subtitle'><i class='material-icons'>info</i> 상태 코드 설명</div>", unsafe_allow_html=True)
+    st.markdown("이 프로젝트에서 사용하는 상태 코드에 대한 설명입니다.")
+
+    for code, description in status_descriptions.items():
+        st.markdown(f"**{code}**: {description}")

@@ -48,6 +48,8 @@ STATUS_YOUTUBE_REGION_BLOCKED = "YOUTUBE_REGION_BLOCKED"
 STATUS_YOUTUBE_EMBEDDING_DISABLED = "YOUTUBE_EMBEDDING_DISABLED"
 STATUS_YOUTUBE_UNAVAILABLE = "YOUTUBE_UNAVAILABLE"
 STATUS_ERROR = "ERROR"
+# STATUS_HOME_REDIRECT = "STATUS_HOME_REDIRECT"
+
 
 # 초기 디렉토리 및 파일 설정
 def setup_directories():
@@ -227,8 +229,8 @@ def detect_youtube_status(html_content):
         return STATUS_YOUTUBE_REGION_BLOCKED, "유튜브 지역 제한 동영상 감지"
     
     # 유튜브 임베딩 비활성화 감지
-    if re.search(r'(embedding has been disabled|임베딩이 비활성화되었습니다)', lower_text):
-        return STATUS_YOUTUBE_EMBEDDING_DISABLED, "유튜브 임베딩 비활성화 감지"
+    # if re.search(r'(embedding has been disabled|임베딩이 비활성화되었습니다)', lower_text):
+    #     return STATUS_YOUTUBE_EMBEDDING_DISABLED, "유튜브 임베딩 비활성화 감지"
     
     # 유튜브 기타 사용 불가 상태 감지
     if re.search(r'(video unavailable|동영상 사용 불가)', lower_text):
@@ -289,36 +291,51 @@ def process_link(row):
         # 리다이렉트를 허용하고 요청 시도
         response = requests.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
 
-        # 리다이렉트 히스토리에서 상태 코드 수집
+        # 리다이렉트 히스토리에서 상태 코드 및 URL 수집
         redirect_codes = [resp.status_code for resp in response.history]
+        redirect_urls = [resp.url for resp in response.history]
         result['redirect_codes'] = redirect_codes if redirect_codes else "없음"
 
         # 최종 응답 상태 코드 처리
-        if 300 <= response.status_code < 400:
-            # 리다이렉트 최종 상태 코드
-            result['status'] = STATUS_REDIRECT
-            final_url = response.url
-            result['log'] = f"리다이렉트 코드 {response.status_code} -> 최종 URL: {final_url}"
-        elif 400 <= response.status_code < 500:
+        final_url = response.url if response.history else url  # 최종 URL 설정
+        
+        if 400 <= response.status_code < 500:
             result['status'] = STATUS_CLIENT_ERROR
-            result['log'] = f"클라이언트 오류 코드 {response.status_code}"
+            result['log'] = f"클라이언트 오류 코드 {response.status_code} - 리소스를 찾을 수 없음"
         elif 500 <= response.status_code < 600:
             result['status'] = STATUS_SERVER_ERROR
-            result['log'] = f"서버 오류 코드 {response.status_code}"
+            result['log'] = f"서버 오류 코드 {response.status_code} - 서버 내부 오류"
+        elif response.history:
+            # 리다이렉트가 존재하는 경우
+            result['status'] = STATUS_REDIRECT
+            redirect_chain = " -> ".join(redirect_urls + [final_url])
+            result['log'] = f"리다이렉트 코드 {redirect_codes} -> 리다이렉트 경로: {redirect_chain}"
+
+            # 홈 도메인으로 리다이렉트된 경우 체크
+            # initial_domain = extract_main_domain(url)
+            # final_domain = extract_main_domain(final_url)
+            # if initial_domain == final_domain and urlparse(final_url).path == '/':
+            #     result['status'] = STATUS_HOME_REDIRECT
+            #     result['log'] += " - 홈 도메인으로 리다이렉트됨"
         else:
-            # Selenium을 이용한 렌더된 HTML 기반 빈 콘텐츠 감지
+            result['status'] = STATUS_OK
+            result['log'] = "200 OK - 정상 응답"
+
+        # 400, 500번대 에러가 아니면 추가 검사 진행
+        if result['status'] == STATUS_OK or result['status'] == STATUS_REDIRECT:
+            # 리다이렉트 여부와 상관없이 최종 도착한 페이지 상태 검사
             if is_empty_content_rendered(driver):
                 result['status'] = STATUS_EMPTY_CONTENT
-                result['log'] = "200 OK 응답 - 콘텐츠 없음 (빈 페이지)"
+                result['log'] += " - 콘텐츠 없음 (빈 페이지)"
             else:
                 # 유튜브 URL인지 확인
-                if "youtube.com" in urlparse(url).netloc:
+                if "youtube.com" in urlparse(final_url).netloc:
                     youtube_status, youtube_log = detect_youtube_status(driver.page_source)
                     result['status'] = youtube_status
-                    result['log'] = youtube_log
+                    result['log'] += f" - {youtube_log}"
                 else:
                     result['status'] = STATUS_OK
-                    result['log'] = "정상 응답"
+                    result['log'] += " - 정상 응답"
 
         result['last_checked'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -366,7 +383,7 @@ def check_links(input_file="test_data.xlsx"):
         df = pd.read_excel(input_file)
         # 필요한 경우 특정 행 필터링
         # df = df[df['id'].astype(str).str.startswith('F차0925006') | df['id'].astype(str).str.startswith('E국0926003')]
-        # df = df[df['id'].astype(str).str.startswith('E국0926003')]
+        # df = df[df['id'].astype(str).str.startswith('T테0101037')]
         processed_data = []
         setup_directories()
 
@@ -384,4 +401,4 @@ def check_links(input_file="test_data.xlsx"):
         logging.error(f"파일 처리 중 오류 발생: {str(e)}")
 
 if __name__ == "__main__":
-    check_links(input_file="test_data_20241025.xlsx")
+    check_links(input_file="test_data_20241028.xlsx")
